@@ -6,13 +6,14 @@ export async function POST(request: Request) {
 
     const adminUser = process.env.ADMIN_USERNAME || 'admin';
     const adminPass = process.env.ADMIN_PASSWORD || 'password123';
-    const adminToken = process.env.ADMIN_TOKEN || 'secret-admin-token-123';
+    // Internal session token, user doesn't need to configure this
+    const internalToken = 'vault-active-session-token';
 
     if (username === adminUser && password === adminPass) {
       const response = NextResponse.json({ success: true });
       
       // Set a cookie for authentication
-      response.cookies.set('admin_token', adminToken, {
+      response.cookies.set('admin_token', internalToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',

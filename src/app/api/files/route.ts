@@ -5,8 +5,8 @@ export async function GET(request: Request) {
   try {
     // Basic auth check
     const cookieHeader = request.headers.get('cookie') || '';
-    const adminToken = process.env.ADMIN_TOKEN || 'secret-admin-token-123';
-    if (!cookieHeader.includes(`admin_token=${adminToken}`)) {
+    const internalToken = 'vault-active-session-token';
+    if (!cookieHeader.includes(`admin_token=${internalToken}`)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
