@@ -63,7 +63,7 @@ export default function Dashboard() {
   };
 
   const handleCopyCommand = (filename: string, index: number) => {
-    const command = `curl -OJ ${origin}/api/download/${filename}`;
+    const command = `curl -OJ ${origin}/d/${filename}`;
     navigator.clipboard.writeText(command);
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
@@ -169,7 +169,7 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2 w-full sm:w-auto">
                         <div className="bg-black/40 border border-white/5 rounded-lg px-3 py-2 flex items-center gap-2 flex-1 sm:flex-initial overflow-hidden group-hover:border-white/10 transition-colors">
                           <span className="text-xs text-green-400 font-mono whitespace-nowrap truncate max-w-[120px] sm:max-w-[200px]">
-                            curl -OJ {origin}/api/download/{file.name}
+                            curl -OJ {origin}/d/{file.name}
                           </span>
                         </div>
                         <button
