@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { put } from '@vercel/blob';
 
 export async function POST(request: Request) {
   try {
@@ -17,25 +18,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Convert File to ArrayBuffer for Supabase
+    if (/[\\/]/.test(file.name) || file.name === '.' || file.name === '..') {
+      return NextResponse.json({ error: 'Invalid file name' }, { status: 400 });
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Upload to Supabase Storage bucket named 'files'
-    // We use upsert: true to overwrite if a file with the same name exists
-    const { data, error } = await supabase.storage
-      .from('files')
-      .upload(file.name, buffer, {
+    const [supabaseResult, blobResult] = await Promise.allSettled([
+      supabase.storage.from('files').upload(file.name, buffer, {
         contentType: file.type || 'text/plain',
         upsert: true,
-      });
+      }),
+      put(`files/${file.name}`, buffer, {
+        access: 'public',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: file.type || 'application/octet-stream',
+      }),
+    ]);
 
-    if (error) {
-      console.error('Supabase upload error:', error);
-      return NextResponse.json({ error: 'Failed to upload to storage' }, { status: 500 });
+    const supabaseUploaded = supabaseResult.status === 'fulfilled' && !supabaseResult.value.error;
+    const blobUploaded = blobResult.status === 'fulfilled';
+
+    if (!supabaseUploaded) {
+      console.error('Supabase upload error:', supabaseResult.status === 'rejected' ? supabaseResult.reason : supabaseResult.value.error);
+    }
+    if (!blobUploaded) console.error('Vercel Blob upload error:', blobResult.reason);
+
+    if (!supabaseUploaded && !blobUploaded) {
+      return NextResponse.json({ error: 'Upload failed in both storage providers' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, path: data.path });
+    const failedProviders = [!supabaseUploaded && 'Supabase', !blobUploaded && 'Vercel Blob'].filter(Boolean);
+    return NextResponse.json({
+      success: true,
+      path: file.name,
+      warning: failedProviders.length ? `File saved, but upload to ${failedProviders.join(' and ')} failed.` : undefined,
+    });
   } catch (error) {
     console.error('Upload handler error:', error);
     return NextResponse.json(

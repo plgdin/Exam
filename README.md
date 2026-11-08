@@ -2,6 +2,12 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Storage configuration
+
+Files are uploaded to both Supabase Storage and Vercel Blob. Downloads try Supabase first and automatically fall back to Vercel Blob. Configure `BLOB_READ_WRITE_TOKEN` in your local environment and in the Vercel project's Environment Variables; create a Blob store in Vercel to get the token. Keep the token secret.
+
+If one provider is unavailable during upload, the upload is kept in the provider that succeeded and the dashboard reports a warning. The dashboard's file list and delete action also work with both providers.
+
 First, run the development server:
 
 ```bash

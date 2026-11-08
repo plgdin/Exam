@@ -51,9 +51,12 @@ export default function Dashboard() {
       });
 
       if (res.ok) {
+        const result = await res.json();
         await fetchFiles();
+        if (result.warning) alert(result.warning);
       } else {
-        alert('Upload failed');
+        const result = await res.json().catch(() => null);
+        alert(result?.error || 'Upload failed');
       }
     } catch (error) {
       console.error('Upload error:', error);

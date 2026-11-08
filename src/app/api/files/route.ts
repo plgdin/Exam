@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { del, list } from '@vercel/blob';
 import { supabase } from '@/lib/supabase';
 
 export async function GET(request: Request) {
@@ -10,17 +11,37 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data, error } = await supabase.storage.from('files').list();
+    const [supabaseResult, blobResult] = await Promise.allSettled([
+      supabase.storage.from('files').list(),
+      list({ prefix: 'files/' }),
+    ]);
+    const filesByName = new Map<string, { name: string; created_at: string }>();
 
-    if (error) {
-      console.error('Supabase list error:', error);
-      return NextResponse.json({ error: 'Failed to list files' }, { status: 500 });
+    if (supabaseResult.status === 'fulfilled' && !supabaseResult.value.error) {
+      for (const file of supabaseResult.value.data) {
+        if (file.name !== '.emptyFolderPlaceholder' && !file.name.startsWith('.')) {
+          filesByName.set(file.name, { name: file.name, created_at: file.created_at ?? new Date().toISOString() });
+        }
+      }
+    } else {
+      console.error('Supabase list error:', supabaseResult.status === 'rejected' ? supabaseResult.reason : supabaseResult.value.error);
     }
 
-    // Filter out potential empty folders or hidden files
-    const files = data.filter(file => file.name !== '.emptyFolderPlaceholder' && !file.name.startsWith('.'));
+    if (blobResult.status === 'fulfilled') {
+      for (const blob of blobResult.value.blobs) {
+        const name = blob.pathname.slice('files/'.length);
+        if (name && !name.startsWith('.')) {
+          filesByName.set(name, { name, created_at: blob.uploadedAt.toISOString() });
+        }
+      }
+    } else {
+      console.error('Vercel Blob list error:', blobResult.reason);
+    }
 
-    return NextResponse.json({ files });
+    if (filesByName.size === 0 && supabaseResult.status === 'rejected' && blobResult.status === 'rejected') {
+      return NextResponse.json({ error: 'Failed to list files from both providers' }, { status: 502 });
+    }
+    return NextResponse.json({ files: [...filesByName.values()] });
   } catch (error) {
     console.error('List handler error:', error);
     return NextResponse.json(
@@ -44,10 +65,26 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Invalid file name' }, { status: 400 });
     }
 
-    const { error } = await supabase.storage.from('files').remove([name]);
-    if (error) {
-      console.error('Supabase delete error:', error);
-      return NextResponse.json({ error: 'Failed to delete file' }, { status: 500 });
+    const pathname = `files/${name}`;
+    const [supabaseResult, blobResult] = await Promise.allSettled([
+      supabase.storage.from('files').remove([name]),
+      list({ prefix: pathname }).then(({ blobs }) =>
+        Promise.all(blobs.filter((blob) => blob.pathname === pathname).map((blob) => del(blob.url)))
+      ),
+    ]);
+    const supabaseDeleted = supabaseResult.status === 'fulfilled' && !supabaseResult.value.error;
+    const blobDeleted = blobResult.status === 'fulfilled';
+
+    if (!supabaseDeleted) {
+      console.error('Supabase delete error:', supabaseResult.status === 'rejected' ? supabaseResult.reason : supabaseResult.value.error);
+    }
+    if (!blobDeleted) console.error('Vercel Blob delete error:', blobResult.reason);
+
+    if (!supabaseDeleted && !blobDeleted) {
+      return NextResponse.json({ error: 'Failed to delete file from both providers' }, { status: 500 });
+    }
+    if (!supabaseDeleted || !blobDeleted) {
+      return NextResponse.json({ error: 'File was deleted from only one provider; retry deletion.' }, { status: 502 });
     }
 
     return NextResponse.json({ success: true });
