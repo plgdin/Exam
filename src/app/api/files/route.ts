@@ -29,3 +29,30 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const cookieHeader = request.headers.get('cookie') || '';
+    const internalToken = 'vault-active-session-token';
+    if (!cookieHeader.includes(`admin_token=${internalToken}`)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const name = body?.name;
+    if (typeof name !== 'string' || !name.trim() || name === '.' || name === '..' || /[\\/]/.test(name)) {
+      return NextResponse.json({ error: 'Invalid file name' }, { status: 400 });
+    }
+
+    const { error } = await supabase.storage.from('files').remove([name]);
+    if (error) {
+      console.error('Supabase delete error:', error);
+      return NextResponse.json({ error: 'Failed to delete file' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Delete handler error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}

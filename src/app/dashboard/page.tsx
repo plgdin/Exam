@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [origin, setOrigin] = useState('');
+  const [deletingFile, setDeletingFile] = useState<string | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -67,6 +68,29 @@ export default function Dashboard() {
     navigator.clipboard.writeText(command);
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const handleDeleteFile = async (filename: string) => {
+    if (!window.confirm(`Delete "${filename}"? This cannot be undone.`)) return;
+
+    setDeletingFile(filename);
+    try {
+      const res = await fetch('/api/files', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: filename }),
+      });
+      if (!res.ok) {
+        alert('Failed to delete file. Please try again.');
+        return;
+      }
+      setFiles((currentFiles) => currentFiles.filter((file) => file.name !== filename));
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Failed to delete file. Please try again.');
+    } finally {
+      setDeletingFile(null);
+    }
   };
 
   const handleLogout = () => {
@@ -181,6 +205,19 @@ export default function Dashboard() {
                             <Check className="w-4 h-4" />
                           ) : (
                             <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteFile(file.name)}
+                          disabled={deletingFile === file.name}
+                          className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-colors border border-red-500/30 shrink-0 disabled:opacity-50"
+                          title={`Delete ${file.name}`}
+                          aria-label={`Delete ${file.name}`}
+                        >
+                          {deletingFile === file.name ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
                           )}
                         </button>
                       </div>
